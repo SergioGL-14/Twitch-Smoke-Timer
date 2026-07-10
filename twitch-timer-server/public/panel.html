@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel de Control PRO - Timer</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #121212;
+            color: #ffffff;
+            margin: 0;
+            padding: 30px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        h1 {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #9146FF; /* Morado Twitch */
+            margin-bottom: 10px;
+        }
+        .tarjeta {
+            background-color: #1e1e1e;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            border: 1px solid #333;
+        }
+        .tarjeta h2 {
+            margin-top: 0;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            font-size: 20px;
+        }
+        .grupo-input {
+            margin-bottom: 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        input[type="number"] {
+            background-color: #2a2a2a;
+            color: white;
+            border: 1px solid #444;
+            padding: 8px 12px;
+            border-radius: 6px;
+            width: 80px;
+            font-size: 16px;
+            text-align: right;
+        }
+        .botones-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        button {
+            background-color: #9146FF;
+            color: white;
+            border: none;
+            padding: 12px;
+            font-size: 15px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: 0.2s;
+        }
+        button:hover { background-color: #772ce8; }
+        .btn-peligro { background-color: #e53935; }
+        .btn-peligro:hover { background-color: #c62828; }
+        .btn-accion { background-color: #43a047; }
+        .btn-accion:hover { background-color: #2e7d32; }
+        .btn-reset { background-color: #f57c00; width: 100%; margin-top: 15px; }
+        .btn-reset:hover { background-color: #ef6c00; }
+        
+        /* Notificación de guardado */
+        #toast {
+            visibility: hidden;
+            min-width: 250px;
+            background-color: #43a047;
+            color: #fff;
+            text-align: center;
+            border-radius: 6px;
+            padding: 16px;
+            position: fixed;
+            z-index: 1;
+            left: 50%;
+            bottom: 30px;
+            transform: translateX(-50%);
+            font-size: 16px;
+            font-weight: bold;
+        }
+        #toast.mostrar {
+            visibility: visible;
+            animation: fadein 0.5s, fadeout 0.5s 2.5s;
+        }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
+
+        /* Pantalla de Login */
+        #login-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #121212;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        #login-overlay h1 { color: #9146FF; margin-bottom: 20px; }
+        .btn-twitch {
+            background-color: #9146FF;
+            color: white; padding: 15px 30px;
+            font-size: 18px; border-radius: 8px;
+            text-decoration: none; font-weight: bold;
+            display: inline-block; transition: 0.2s;
+        }
+        .btn-twitch:hover { background-color: #772ce8; }
+    </style>
+</head>
+<body>
+    <div id="overlay-aprobacion" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.85); backdrop-filter: blur(8px); z-index: 9999; justify-content: center; align-items: center; flex-direction: column;">
+        <h1 style="color: #9146FF; font-size: 32px; margin-bottom: 10px;">⏳ Cuenta en Revisión</h1>
+        <p style="color: #ccc; font-size: 18px; text-align: center; max-width: 500px;">Tu cuenta ha sido registrada y está pendiente de aprobación por el administrador. <br><br>Por favor, espera pacientemente.</p>
+        <button class="btn-peligro" onclick="cerrarSesion()" style="margin-top: 30px; width: auto;">Cerrar Sesión</button>
+    </div>
+
+    <!-- PANTALLA DE PANEL DE CONTROL -->
+
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 25px; grid-column: 1 / -1;">
+        <h1 id="titulo-panel" style="margin:0; text-align: left; grid-column: auto;">⚙️ Panel de Control</h1>
+        <button class="btn-peligro" onclick="cerrarSesion()" style="padding: 10px 20px; font-size: 14px; width: auto;">🔌 Cerrar Sesión</button>
+    </div>
+
+    <!-- SECCIÓN 0: URL DE OBS -->
+    <div class="tarjeta" style="border-color: #9146FF; display: flex; flex-direction: column; justify-content: center;">
+        <h2>🔗 Tu Enlace para OBS</h2>
+        <p style="color: #ccc; font-size: 15px; margin-bottom: 15px;">Copia esta URL y añádela como "Fuente de Navegador" en OBS. <strong>¡No la compartas con nadie!</strong></p>
+        <div style="display: flex; gap: 10px;">
+            <input type="text" id="inputURL" readonly style="flex: 1; background: #121212; color: #9146FF; border: 1px solid #444; padding: 12px; border-radius: 6px; font-family: monospace; font-size: 15px;">
+            <button onclick="copiarURL()" class="btn-twitch" style="width: auto; padding: 10px 20px;">📋 Copiar</button>
+            <a id="linkOBS" href="#" target="_blank" class="btn-twitch" style="width: auto; padding: 10px 20px; background-color: #333; color: white;">👁️ Probar</a>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 1: CONTROLES MANUALES Y PRUEBAS -->
+    <div class="tarjeta">
+        <h2>⏱️ Controles Rápidos</h2>
+        <div class="botones-grid">
+            <button class="btn-peligro" onclick="modificarTiempo(-30)">- 30 Segundos</button>
+            <button onclick="modificarTiempo(30)">+ 30 Segundos</button>
+            <button onclick="modificarTiempo(60)">+ 1 Minuto</button>
+            <button onclick="modificarTiempo(300)">+ 5 Minutos</button>
+        </div>
+        <button class="btn-reset" style="width: 100%; margin-top: 10px;" onclick="resetearReloj()">🔄 Reiniciar Reloj al Tiempo Inicial</button>
+        
+        <h2 style="margin-top: 30px;">🧪 Simulador Twitch</h2>
+        <div class="botones-grid">
+            <button class="btn-accion" onclick="simularEvento('follow', 1)">Simular Follow</button>
+            <button class="btn-accion" onclick="simularEvento('sub', 1)">Simular Sub</button>
+            <button class="btn-accion" onclick="simularEvento('bit', 100)" style="grid-column: span 2;">Simular 100 Bits</button>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 3: PERSONALIZAR RECURSOS (IZQUIERDA) -->
+    <div class="tarjeta">
+        <h2>🎨 Personalizar Alertas</h2>
+        <p style="color: #ccc; font-size: 14px; margin-bottom: 20px;">Sube tus propias imágenes (JPG/PNG/GIF) o sonidos (MP3). Máximo 5MB por archivo.</p>
+        
+        <div class="botones-grid" style="grid-template-columns: 1fr; gap: 15px;">
+            <div class="grupo-input" style="flex-direction: column; align-items: flex-start; gap: 5px;">
+                <label>Imagen "Prohibido" (Durante el tiempo):</label>
+                <input type="file" accept="image/*" onchange="subirArchivo('prohibido.jpg', this)" style="width: 100%;">
+            </div>
+            <div class="grupo-input" style="flex-direction: column; align-items: flex-start; gap: 5px;">
+                <label>Imagen "Permitido" (Tiempo a 0):</label>
+                <input type="file" accept="image/*" onchange="subirArchivo('permitido.jpg', this)" style="width: 100%;">
+            </div>
+            <div class="grupo-input" style="flex-direction: column; align-items: flex-start; gap: 5px;">
+                <label>Sonido "Suma de Tiempo" (MP3):</label>
+                <input type="file" accept=".mp3" onchange="subirArchivo('alerta_suma.mp3', this)" style="width: 100%;">
+            </div>
+            <div class="grupo-input" style="flex-direction: column; align-items: flex-start; gap: 5px;">
+                <label>Sonido "Permitido" (MP3):</label>
+                <input type="file" accept=".mp3" onchange="subirArchivo('alerta_fin.mp3', this)" style="width: 100%;">
+            </div>
+        </div>
+    </div>
+
+    <!-- SECCIÓN 2: CONFIGURACIÓN DE REGLAS (DERECHA) -->
+    <div class="tarjeta">
+        <h2>📏 Reglas del Stream</h2>
+        
+        <div class="grupo-input">
+            <label>Tiempo Inicial (minutos):</label>
+            <input type="number" id="confInicio" min="1">
+        </div>
+        <div class="grupo-input">
+            <label>Segundos añadidos por Follow:</label>
+            <input type="number" id="confFollow" min="0">
+        </div>
+        <div class="grupo-input">
+            <label>Segundos añadidos por Sub:</label>
+            <input type="number" id="confSub" min="0">
+        </div>
+        <div class="grupo-input">
+            <label>Segundos añadidos por 1 Bit:</label>
+            <input type="number" id="confBit" min="0" step="1">
+        </div>
+        <div class="grupo-input">
+            <div>
+                <label>Auto-reinicio tras fin (minutos):</label>
+                <small style="display:block; color:#aaa; margin-top:5px; font-weight: normal; font-size: 12px;">(Pon 0 para que no se reinicie automáticamente)</small>
+            </div>
+            <input type="number" id="confRefresco" min="0" step="1">
+        </div>
+        <hr style="border-color: #333; margin: 20px 0;">
+        <h3 style="margin-top: 0; font-size: 16px; color: #ffcc00;">Efectos del Overlay</h3>
+        <div class="grupo-input">
+            <label>Habilitar GIFs (Alertas visuales):</label>
+            <input type="checkbox" id="confGifs" style="width: 20px; height: 20px; accent-color: #9146FF;">
+        </div>
+        <div class="grupo-input">
+            <label>Habilitar Animación del Reloj:</label>
+            <input type="checkbox" id="confReloj" style="width: 20px; height: 20px; accent-color: #9146FF;">
+        </div>
+        <div class="grupo-input">
+            <label>Habilitar Sonidos (MP3):</label>
+            <input type="checkbox" id="confSonido" style="width: 20px; height: 20px; accent-color: #9146FF;">
+        </div>
+    </div>
+
+    <!-- SECCIÓN 4: ACCIONES FINALES (ABAJO DEL TODO) -->
+    <div class="tarjeta" style="grid-column: 1 / -1; padding: 15px 25px;">
+        <button style="width: 100%; font-size: 18px; padding: 15px;" onclick="guardarConfig()">💾 Guardar Configuración</button>
+    </div>
+
+    <div id="toast">¡Configuración guardada con éxito!</div>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+
+        function procesarLogin() {
+            const hash = window.location.hash;
+            let token = localStorage.getItem('twitch_access_token');
+
+            if (hash.includes('access_token')) {
+                const urlParams = new URLSearchParams(hash.substring(1));
+                token = urlParams.get('access_token');
+                localStorage.setItem('twitch_access_token', token);
+                window.history.replaceState(null, null, '/panel');
+            }
+
+            if (token) {
+                socket.emit('loginToken', token);
+            } else {
+                // Si no hay token, lo mandamos a la portada a iniciar sesión
+                window.location.href = '/';
+            }
+        }
+        
+        function cerrarSesion() {
+            localStorage.removeItem('twitch_access_token');
+            window.location.href = '/';
+        }
+        
+        procesarLogin();
+
+        // 1. Cargar las reglas actuales al abrir el panel
+        socket.on('reglasActuales', (reglas) => {
+            document.getElementById('confInicio').value = reglas.tiempoInicial / 60; // Convertir a minutos para mostrar
+            document.getElementById('confFollow').value = reglas.tiempoFollow;
+            document.getElementById('confSub').value = reglas.tiempoSub;
+            document.getElementById('confBit').value = reglas.tiempoBit;
+            document.getElementById('confRefresco').value = (reglas.tiempoRefresco || 0) / 60;
+            document.getElementById('confGifs').checked = reglas.gifsHabilitados !== false;
+            document.getElementById('confReloj').checked = reglas.relojAnimado !== false;
+            document.getElementById('confSonido').checked = reglas.sonidoHabilitado !== false;
+        });
+
+        socket.on('estadoUsuario', (estado) => {
+            if (estado === 'pendiente') {
+                document.getElementById('overlay-aprobacion').style.display = 'flex';
+            } else if (estado === 'aprobado') {
+                document.getElementById('overlay-aprobacion').style.display = 'none';
+            }
+        });
+
+        // Cargar info del usuario para el link de OBS
+        socket.on('infoUsuario', (data) => {
+            document.getElementById('titulo-panel').innerText = `⚙️ Panel de Control - ${data.userName}`;
+            const linkOBS = document.getElementById('linkOBS');
+            const inputURL = document.getElementById('inputURL');
+            const overlayUrl = `${window.location.origin}/overlay.html?user=${data.userId}`;
+            
+            linkOBS.href = overlayUrl;
+            inputURL.value = overlayUrl;
+            
+            const toast = document.getElementById("toast");
+            toast.innerText = `¡Conectado como ${data.userName}!`;
+            toast.className = "mostrar";
+            setTimeout(() => { 
+                toast.className = toast.className.replace("mostrar", ""); 
+                toast.innerText = "¡Configuración guardada con éxito!"; 
+            }, 3000);
+        });
+
+        // 2. Función para guardar y enviar nuevas reglas
+        function guardarConfig() {
+            const nuevasReglas = {
+                tiempoInicial: parseInt(document.getElementById('confInicio').value) * 60, // Pasamos de minutos a segundos
+                tiempoFollow: parseInt(document.getElementById('confFollow').value),
+                tiempoSub: parseInt(document.getElementById('confSub').value),
+                tiempoBit: parseInt(document.getElementById('confBit').value),
+                tiempoRefresco: parseInt(document.getElementById('confRefresco').value) * 60,
+                gifsHabilitados: document.getElementById('confGifs').checked,
+                relojAnimado: document.getElementById('confReloj').checked,
+                sonidoHabilitado: document.getElementById('confSonido').checked
+            };
+            socket.emit('guardarConfig', nuevasReglas);
+            
+            // Mostrar notificación visual
+            const toast = document.getElementById("toast");
+            toast.className = "mostrar";
+            setTimeout(() => { toast.className = toast.className.replace("mostrar", ""); }, 3000);
+        }
+
+        // 3. Botones manuales
+        function modificarTiempo(segundos) {
+            socket.emit('cambiarTiempo', segundos);
+        }
+
+        function resetearReloj() {
+            if(confirm("¿Seguro que quieres reiniciar el tiempo al valor inicial configurado?")) {
+                socket.emit('reset');
+            }
+        }
+
+        function copiarURL() {
+            const copyText = document.getElementById("inputURL");
+            copyText.select();
+            copyText.setSelectionRange(0, 99999);
+            navigator.clipboard.writeText(copyText.value);
+            
+            const toast = document.getElementById("toast");
+            toast.innerText = "¡Enlace copiado al portapapeles!";
+            toast.className = "mostrar";
+            setTimeout(() => { 
+                toast.className = toast.className.replace("mostrar", ""); 
+                toast.innerText = "¡Configuración guardada con éxito!"; 
+            }, 3000);
+        }
+
+        function cerrarSesion() {
+            if(confirm("¿Seguro que quieres cerrar sesión de Twitch?")) {
+                localStorage.removeItem('twitch_access_token');
+                window.location.reload();
+            }
+        }
+
+        // 4. Simulador usando el nuevo sistema del servidor (Multi-Tenant)
+        function simularEvento(tipo, cantidad) {
+            socket.emit('simularEvento', { tipo, cantidad });
+        }
+
+        // 5. Subir archivo
+        function subirArchivo(nombreDestino, inputElement) {
+            const file = inputElement.files[0];
+            if (!file) return;
+            
+            if (file.size > 5 * 1024 * 1024) {
+                alert("El archivo es demasiado grande. Máximo 5MB.");
+                inputElement.value = "";
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const buffer = e.target.result;
+                socket.emit('subirArchivo', { nombre: nombreDestino, buffer: buffer });
+                
+                const toast = document.getElementById("toast");
+                toast.innerText = "¡Archivo subido! (Reinicia el overlay en OBS para verlo)";
+                toast.className = "mostrar";
+                setTimeout(() => { 
+                    toast.className = toast.className.replace("mostrar", ""); 
+                    toast.innerText = "¡Configuración guardada con éxito!"; 
+                }, 4000);
+            };
+            reader.readAsArrayBuffer(file);
+        }
+    </script>
+</body>
+</html>

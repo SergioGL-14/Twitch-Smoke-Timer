@@ -1,0 +1,26 @@
+# Node.js
+node_modules/
+npm-debug.log
+yarn-error.log
+
+# Databases
+*.sqlite
+*.db
+
+# Env variables
+.env
+.env.local
+.env.development
+.env.test
+.env.production
+
+# Mac OS
+.DS_Store
+
+# User Uploads (For Multi-Tenant Server)
+twitch-timer-server/uploads/*
+!twitch-timer-server/uploads/.gitkeep
+
+# IDEs
+.vscode/
+.idea/

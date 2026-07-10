@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Administración - Twitch Timer</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #121212; color: #ffffff; margin: 0; padding: 30px; }
+        h1 { color: #9146FF; }
+        .tarjeta { background-color: #1e1e1e; padding: 25px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; }
+        input { background-color: #2a2a2a; color: white; border: 1px solid #444; padding: 10px; border-radius: 6px; margin-bottom: 15px; width: 100%; box-sizing: border-box; }
+        button { background-color: #9146FF; color: white; border: none; padding: 12px 20px; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; }
+        button:hover { background-color: #772ce8; }
+        .btn-peligro { background-color: #e53935; }
+        .btn-peligro:hover { background-color: #b71c1c; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { border: 1px solid #333; padding: 10px; text-align: left; }
+        th { background-color: #2a2a2a; color: #9146FF; }
+        #panel-admin { display: none; }
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 20px; }
+        .stat-box { background-color: #2a2a2a; padding: 20px; border-radius: 8px; text-align: center; font-size: 24px; font-weight: bold; }
+        .stat-label { font-size: 14px; color: #aaa; font-weight: normal; display: block; margin-bottom: 5px; }
+        /* Toggle Switch CSS */
+        .switch { position: relative; display: inline-block; width: 50px; height: 26px; }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #444; transition: .4s; border-radius: 34px; }
+        .slider:before { position: absolute; content: ""; height: 18px; width: 18px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+        input:checked + .slider { background-color: #9146FF; }
+        input:checked + .slider:before { transform: translateX(24px); }
+    </style>
+</head>
+<body>
+    <div id="pantalla-login" class="tarjeta" style="max-width: 400px; margin: 100px auto;">
+        <h2 style="text-align: center; color: #9146FF;">🔒 Acceso Restringido</h2>
+        <input type="text" id="adminUser" placeholder="Usuario">
+        <input type="password" id="adminPass" placeholder="Contraseña">
+        <button onclick="loginAdmin()">Entrar</button>
+        <p id="login-error" style="color: #e53935; text-align: center; display: none;">Credenciales incorrectas</p>
+    </div>
+
+    <div id="panel-admin">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h1>🛡️ Panel de Control del Servidor</h1>
+            <button class="btn-peligro" onclick="cerrarSesionAdmin()" style="width: auto;">Cerrar Sesión</button>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-box"><span class="stat-label">Usuarios Registrados</span><span id="stat-usuarios">0</span></div>
+            <div class="stat-box"><span class="stat-label">Conexiones Activas (WebSockets)</span><span id="stat-conexiones">0</span></div>
+        </div>
+
+        <div class="tarjeta">
+            <h2>👥 Gestión de Usuarios</h2>
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID (Nombre)</th>
+                        <th>Estado</th>
+                        <th>Archivos</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="tabla-usuarios">
+                    <!-- Dinámico -->
+                </tbody>
+            </table>
+        </div>
+
+        <div class="tarjeta" style="margin-top: 30px;">
+            <h2>⚙️ Ajustes del Servidor</h2>
+
+            <div style="margin-bottom: 25px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h3 style="margin: 0 0 5px 0; font-size: 16px;">Requerir Aprobación Manual</h3>
+                    <p style="margin: 0; color: #aaa; font-size: 13px;">Si está activo, los nuevos usuarios irán a la lista de espera (Whitelist).</p>
+                </div>
+                <label class="switch">
+                    <input type="checkbox" id="toggleApproval" onchange="toggleApproval()">
+                    <span class="slider"></span>
+                </label>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <input type="text" id="newAdminUser" placeholder="Nuevo Usuario Maestro">
+                <input type="password" id="newAdminPass" placeholder="Nueva Contraseña">
+            </div>
+            <button onclick="cambiarCredenciales()" style="margin-top: 10px;">💾 Guardar Credenciales</button>
+            <p id="config-ok" style="color: #4caf50; display: none; text-align: center; margin-top: 15px; font-weight: bold;">¡Credenciales actualizadas!</p>
+        </div>
+    </div>
+
+    <script>
+        let adminToken = localStorage.getItem('adminToken');
+
+        if (adminToken) {
+            mostrarPanel();
+        }
+
+        async function loginAdmin() {
+            const user = document.getElementById('adminUser').value;
+            const pass = document.getElementById('adminPass').value;
+            const res = await fetch('/api/admin/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ user, pass })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                adminToken = data.token;
+                localStorage.setItem('adminToken', adminToken);
+                mostrarPanel();
+            } else {
+                document.getElementById('login-error').style.display = 'block';
+            }
+        }
+
+        function cerrarSesionAdmin() {
+            localStorage.removeItem('adminToken');
+            window.location.reload();
+        }
+
+        async function mostrarPanel() {
+            document.getElementById('pantalla-login').style.display = 'none';
+            document.getElementById('panel-admin').style.display = 'block';
+            cargarDatos();
+        }
+
+        async function cargarDatos() {
+            const res = await fetch('/api/admin/stats', {
+                headers: { 'Authorization': adminToken }
+            });
+            if (res.status === 401) {
+                cerrarSesionAdmin();
+                return;
+            }
+            const data = await res.json();
+            
+            document.getElementById('stat-usuarios').innerText = data.usuarios.length;
+            document.getElementById('stat-conexiones').innerText = data.conexionesActivas;
+            document.getElementById('toggleApproval').checked = data.requireApproval;
+
+            const tbody = document.getElementById('tabla-usuarios');
+            tbody.innerHTML = '';
+            
+            data.usuarios.forEach(u => {
+                const tr = document.createElement('tr');
+                const isPendiente = u.estado === 'pendiente';
+                tr.innerHTML = `
+                    <td>${u.userId}<br><small style="color:#aaa;">${u.twitchName}</small></td>
+                    <td>
+                        <span style="color: ${isPendiente ? '#ff9800' : '#4caf50'}">
+                            ${isPendiente ? '⏳ Pendiente' : '✅ Aprobado'}
+                        </span>
+                    </td>
+                    <td>${u.tieneCustoms ? '✅ Sí' : '❌ No'}</td>
+                    <td>
+                        ${isPendiente ? `<button style="background-color: #4caf50; padding: 5px 10px; width: auto; margin-right: 5px;" onclick="aprobarUsuario('${u.userId}')">✔️ Aprobar</button>` : ''}
+                        <button class="btn-peligro" style="padding: 5px 10px; width: auto;" onclick="borrarUsuario('${u.userId}')">🗑️ Borrar</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function borrarUsuario(userId) {
+            if (!confirm(`¿Borrar TODO el progreso, reglas y archivos del usuario ${userId}?`)) return;
+            const res = await fetch(`/api/admin/users/${userId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': adminToken }
+            });
+            if (res.ok) cargarDatos();
+        }
+
+        async function aprobarUsuario(userId) {
+            const res = await fetch(`/api/admin/approve/${userId}`, {
+                method: 'POST',
+                headers: { 'Authorization': adminToken }
+            });
+            if (res.ok) cargarDatos();
+        }
+
+        async function cambiarCredenciales() {
+            const user = document.getElementById('newAdminUser').value;
+            const pass = document.getElementById('newAdminPass').value;
+            if (!user || !pass) return alert("Rellena ambos campos");
+
+            const res = await fetch('/api/admin/config', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': adminToken },
+                body: JSON.stringify({ user, pass })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                adminToken = data.token;
+                localStorage.setItem('adminToken', adminToken);
+                document.getElementById('newAdminUser').value = '';
+                document.getElementById('newAdminPass').value = '';
+                document.getElementById('config-ok').style.display = 'block';
+                setTimeout(() => document.getElementById('config-ok').style.display = 'none', 3000);
+            } else {
+                alert("Error al cambiar credenciales");
+            }
+        }
+
+        async function toggleApproval() {
+            const checked = document.getElementById('toggleApproval').checked;
+            const res = await fetch('/api/admin/config/approval', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': adminToken },
+                body: JSON.stringify({ requireApproval: checked })
+            });
+            if (!res.ok) alert("Error al guardar la configuración");
+        }
+    </script>
+</body>
+</html>

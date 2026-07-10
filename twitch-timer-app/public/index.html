@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Timer Twitch - Pitillo Animado</title>
+    <style>
+        body {
+            background-color: transparent; 
+            color: white;
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        .contenedor {
+            text-align: center;
+            padding: 20px 40px;
+            position: relative;
+        }
+        .titulo {
+            font-size: 26px;
+            color: #ffcc00;
+            margin-bottom: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px black;
+        }
+        #timer {
+            font-size: 95px;
+            font-weight: bold;
+            text-shadow: 3px 3px 6px black;
+            transition: transform 0.2s ease, color 0.2s ease;
+        }
+        
+        /* Contenedor del GIF Animado (Oculto por defecto) */
+        #contenedor-gif {
+            position: absolute;
+            top: -120px; /* Aparecerá por encima del reloj */
+            left: 50%;
+            transform: translateX(-50%) scale(0);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275); /* Efecto rebote */
+            opacity: 0;
+            z-index: 10;
+        }
+        #contenedor-gif img {
+            height: 120px; /* Tamaño del GIF */
+            border-radius: 10px;
+        }
+
+        /* CLASES DE ANIMACIÓN AL RECIBIR DONACIÓN */
+        .animacion-suma {
+            color: #00ffcc !important; /* Color vibrante */
+            transform: scale(1.15) rotate(-2deg); /* Se hace grande y se tuerce un poco */
+            text-shadow: 0 0 20px #00ffcc, 0 0 40px #00ffcc !important;
+        }
+        .animacion-fin {
+            color: #ffcc00 !important; /* Amarillo como el título */
+            transform: scale(1.2); /* Crece bastante */
+            text-shadow: 0 0 20px #ffcc00, 0 0 40px #ffcc00 !important;
+        }
+        .mostrar-gif {
+            transform: translateX(-50%) scale(1) !important;
+            opacity: 1 !important;
+        }
+        
+        /* Notificación inferior */
+        #notificacion {
+            position: absolute;
+            bottom: -50px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: #9146FF;
+            color: white;
+            padding: 10px 25px;
+            border-radius: 8px;
+            font-size: 20px;
+            font-weight: bold;
+            white-space: nowrap;
+            opacity: 0;
+            transition: all 0.5s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.5);
+        }
+        .mostrar-notificacion {
+            bottom: -25px !important;
+            opacity: 1 !important;
+        }
+        
+        .notificacion-fin {
+            background-color: transparent !important;
+            box-shadow: none !important;
+            color: #ffcc00 !important;
+            font-size: 22px !important; /* Más pequeño */
+            text-shadow: 2px 2px 4px black, 0 0 10px #ffcc00 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="contenedor">
+        <!-- AQUÍ PONDRÁS EL NOMBRE DE TU ARCHIVO GIF O JPG -->
+        <div id="contenedor-gif">
+            <img id="img-prohibido" src="prohibido.jpg" alt="No Fumar" onerror="this.style.display='none'"> 
+            <img id="img-permitido" src="permitido.jpg" alt="Fumar Permitido" style="display: none;" onerror="this.style.display='none'"> 
+        </div>
+
+        <div class="titulo">🚬 Próximo pitillo en:</div>
+        <div id="timer">10:00</div>
+        
+        <div id="notificacion">¡Alguien donó!</div>
+    </div>
+
+    <!-- PISTAS DE AUDIO -->
+    <audio id="sonidoSuma" src="alerta_suma.mp3"></audio>
+    <audio id="sonidoFin" src="alerta_fin.mp3"></audio>
+
+    <script src="https://cdn.socket.io/4.8.1/socket.io.min.js"></script>
+    <script>
+        const socket = io();
+        const timerElement = document.getElementById('timer');
+        const notificacionElement = document.getElementById('notificacion');
+        const gifElement = document.getElementById('contenedor-gif');
+        const imgProhibido = document.getElementById('img-prohibido');
+        const imgPermitido = document.getElementById('img-permitido');
+        const audioSuma = document.getElementById('sonidoSuma');
+        const audioFin = document.getElementById('sonidoFin');
+        
+        let yaAvisadoFin = false;
+
+        socket.on('actualizarTiempo', (segundos) => {
+            const minutos = Math.floor(segundos / 60);
+            const segundosRestantes = segundos % 60;
+            const segundosFormateados = segundosRestantes.toString().padStart(2, '0');
+            timerElement.innerText = `${minutos}:${segundosFormateados}`;
+            
+            // Detectar fin del temporizador
+            if (segundos === 0 && !yaAvisadoFin) {
+                yaAvisadoFin = true;
+                lanzarAlertaFin();
+            } else if (segundos > 0) {
+                yaAvisadoFin = false; // Resetear si se añade tiempo extra
+            }
+        });
+
+        function lanzarAlertaFin() {
+            if(audioFin) {
+                audioFin.currentTime = 0; 
+                audioFin.play().catch(e => console.log("Audio fin no cargado"));
+            }
+
+            imgProhibido.style.display = 'none';
+            imgPermitido.style.display = 'block';
+
+            timerElement.classList.add('animacion-fin');
+            gifElement.classList.add('mostrar-gif');
+            
+            notificacionElement.innerText = `Lume!!`;
+            notificacionElement.classList.add('notificacion-fin');
+            notificacionElement.classList.add('mostrar-notificacion');
+
+            setTimeout(() => {
+                timerElement.classList.remove('animacion-fin');
+                gifElement.classList.remove('mostrar-gif');
+                notificacionElement.classList.remove('mostrar-notificacion');
+                
+                // Restaurar después de que baje la animación
+                setTimeout(() => {
+                    imgProhibido.style.display = 'block';
+                    imgPermitido.style.display = 'none';
+                    notificacionElement.classList.remove('notificacion-fin');
+                }, 500); 
+            }, 8000); // 8 segundos de celebración
+        }
+
+        socket.on('alertaSuma', (datos) => {
+            // Sonido
+            if(audioSuma) {
+                audioSuma.currentTime = 0; 
+                audioSuma.play().catch(e => console.log("Audio suma no cargado"));
+            }
+
+            // Animaciones
+            timerElement.classList.add('animacion-suma');
+            
+            // Asegurar que sale la imagen prohibida al sumar tiempo
+            imgProhibido.style.display = 'block';
+            imgPermitido.style.display = 'none';
+            gifElement.classList.add('mostrar-gif');
+            
+            notificacionElement.innerText = `¡${datos.usuario} añadió +${datos.segundos}s!`;
+            notificacionElement.classList.add('mostrar-notificacion');
+
+            // Quitar animaciones después de 4 segundos
+            setTimeout(() => {
+                timerElement.classList.remove('animacion-suma');
+                gifElement.classList.remove('mostrar-gif');
+                notificacionElement.classList.remove('mostrar-notificacion');
+            }, 4000);
+        });
+    </script>
+</body>
+</html>
