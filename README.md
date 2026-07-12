@@ -1,80 +1,56 @@
-<div align="center">
-  <img src="https://img.shields.io/badge/Node.js-43853D?style=for-the-badge&logo=node.js&logoColor=white" alt="Node.js" />
-  <img src="https://img.shields.io/badge/Socket.io-010101?style=for-the-badge&logo=socket.io&logoColor=white" alt="Socket.io" />
-  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" alt="SQLite" />
-  <img src="https://img.shields.io/badge/Twitch_API-9146FF?style=for-the-badge&logo=twitch&logoColor=white" alt="Twitch API" />
-  <img src="https://img.shields.io/badge/License-MIT-blue?style=for-the-badge" alt="MIT License" />
-  <br>
-  <h1>⏱️ Twitch Interactive Timer ("El Pitillo")</h1>
-  <p><b>An interactive, real-time OBS countdown timer controlled by your Twitch Chat via Follows, Subs, and Bits.</b></p>
-</div>
+# Twitch Timer SaaS (Multi-Tenant)
 
----
+Este repositorio contiene el código fuente para desplegar un servicio SaaS (Software as a Service) privado que gestiona temporizadores interactivos para múltiples streamers de Twitch simultáneamente.
 
-## 📖 What is this?
-**Twitch Timer** is an open-source, highly customizable widget for OBS. It creates an on-screen countdown timer that automatically adds seconds whenever a viewer interacts with your stream (Follow, Subscribe, or donate Bits). It is completely driven by the official Twitch EventSub WebSockets API for millisecond-precision real-time updates.
+El sistema se basa en listas blancas (whitelist) y aprobación manual de usuarios.
 
-This repository is split into two distinct versions to fit any streamer's or developer's needs:
+## Características Principales
 
-### 1. 🖥️ The Standalone App (`twitch-timer-app`)
-A lightweight, single-tenant Node.js app designed to be run **locally on your own PC** while you stream.
-- Zero complex databases.
-- Runs completely on `localhost`.
-- Perfect for individual streamers who just want to `npm start` and go live.
+*   **Multi-Usuario Real:** Cada streamer dispone de su propia sesión en memoria, aislada mediante namespaces de socket.
+*   **Archivos Personalizados por Streamer:** El sistema genera directorios únicos en `/uploads/{TWITCH_ID}/` para almacenar assets (GIF/JPG y MP3) individuales.
+*   **Aprobación Manual:** Los nuevos registros se marcan como `pendiente` y no consumen recursos hasta ser aprobados.
+*   **Panel de Administración Oculto:** Ruta de administración protegida por contraseña para gestionar usuarios y parámetros globales.
+*   **Base de Datos Integrada:** Utilización de SQLite (`database.sqlite`) para persistir configuraciones, estados y variables del servidor.
+*   **Integración EventSub:** Implementación de `@twurple/eventsub-ws` para recepcionar eventos de Twitch (Bits, Subs, Follows) vía WebSockets.
 
-### 2. ☁️ The Cloud SaaS Server (`twitch-timer-server`)
-A production-ready, **Multi-Tenant SaaS architecture** designed to be deployed to a VPS (like Google Cloud).
-- **Multi-Tenant:** Host the timer for hundreds of streamers simultaneously on a single server.
-- **SQLite Database:** Persistent configurations for each user.
-- **Admin Whitelist:** A hidden `/adminconf` dashboard to manually approve new streamers.
-- **Custom Assets:** Each streamer gets their own isolated `uploads/` folder for custom MP3 sounds and GIF animations via their control panel.
-- *(Includes full deployment guides for Google Cloud, Ubuntu, Nginx, DuckDNS, and Let's Encrypt).*
+## Configuración de la API de Twitch (Requisito Previo)
 
----
+Antes de inicializar el servidor, es imperativo registrar la aplicación para obtener credenciales de acceso.
 
-## ✨ Features
-- **Real-Time WebSockets:** Uses `@twurple/eventsub-ws` to react instantly without polling.
-- **Customizable Rules:** Streamers can set their own values (e.g., +30s per follow, +300s per sub).
-- **Control Panel:** A beautiful, dark-mode web dashboard to control the timer manually, simulate events, and upload custom assets.
-- **Visual & Audio Toggles:** Streamers can independently toggle CSS animations, GIFs, and MP3 sounds to fit their stream's vibe.
+1. Acceder a `dev.twitch.tv/console` y registrar una nueva aplicación.
+2. Configurar la **OAuth Redirect URI**:
+   - Entorno de desarrollo (Local): `http://localhost:3000/auth/twitch/callback`
+   - Entorno de producción (SaaS): Obligatorio HTTPS (ej. `https://dominio.com/auth/twitch/callback`).
+3. Generar el `Client ID` y `Client Secret`.
+4. Insertar estas credenciales en el archivo `.env` del servidor.
 
----
+El flujo de autenticación implementado utiliza OAuth2 para solicitar scopes (`bits:read`, `channel:read:subscriptions`) y generar tokens de acceso para instanciar la conexión EventSub.
 
-## 🚀 Quick Start (Local App)
+## Instalación y Pruebas (Entorno Local)
 
-Want to run the timer on your own PC right now?
+1. Requisitos: Node.js v18+.
+2. Clonar el repositorio e instalar dependencias: `npm install`.
+3. Iniciar el demonio de Node: `node server.js`.
+4. Acceder vía navegador a `http://localhost:3000`.
+5. Ejecutar login con Twitch. Al estar la whitelist activada, el usuario quedará en estado de revisión.
+6. Acceder al panel de administración en `http://localhost:3000/adminconf` (Credenciales por defecto: `admin` / `1234`).
+7. Aprobar al usuario en la tabla de registros para habilitar su panel de control.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/yourusername/twitch-timer.git
-   cd twitch-timer/twitch-timer-app
-   ```
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-3. **Run the app:**
-   ```bash
-   npm start
-   ```
-4. **Open your browser:** Go to `http://localhost:3000` to log in with Twitch and get your OBS URL!
+## Estructura del Proyecto
 
----
+- `server.js`: Módulo principal. Instancia Express, rutas HTTP, BBDD SQLite, API administrativa y servidor Socket.io.
+- `twitch.js`: Módulo de conexión. Gestiona EventSub y WebSockets de Twitch mediante `@twurple`.
+- `public/`: Archivos estáticos accesibles públicamente (`index.html`, `panel.html`, `overlay.html`).
+- `private/`: Directorio restringido que contiene `admin.html`.
+- `uploads/`: Directorio dinámico autogenerado para assets estáticos de usuarios.
 
-## 📚 Documentation & Cloud Deployment
+## Índice de Documentación de Despliegue
 
-If you want to deploy the **SaaS Server** version to the cloud, we have provided an exhaustive ecosystem of documentation (currently in Spanish).
+Para proceder con el despliegue del código en un servidor en producción, ejecutar la lectura de los siguientes manuales técnicos en orden secuencial:
 
-- [📖 Architecture & DB Docs](twitch-timer-server/Documentacion.md)
-- [☁️ Google Cloud Free Tier Setup](twitch-timer-server/GCP_SERVER_GUIDE.md)
-- [🐧 Ubuntu & PM2 Setup](twitch-timer-server/UBUNTU_SETUP_GUIDE.md)
-- [🔒 DuckDNS, Nginx & HTTPS](twitch-timer-server/DNS_HTTPS_GUIDE.md)
-
----
-
-## 🤝 Contributing
-Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](../../issues).
-Read our [Contributing Guide](CONTRIBUTING.md) to get started.
-
-## 📝 License
-This project is [MIT](LICENSE) licensed.
+1. **Documentacion.md**: Arquitectura interna Multi-Tenant, persistencia de datos (SQLite) y gestión de memoria (Map).
+2. **GCP_SERVER_GUIDE.md**: Provisión de máquina virtual e2-micro en Google Cloud Platform.
+3. **UBUNTU_SETUP_GUIDE.md**: Securización de SO, instalación de Node.js, dependencias base y Nginx.
+4. **SERVER_GUIDE.md**: Clonación de repositorio, setup de variables de entorno y ejecución persistente mediante PM2.
+5. **DNS_HTTPS_GUIDE.md**: Configuración de registros DNS y provisión de certificados TLS (Certbot) para habilitar HTTPS.
+6. **TROUBLESHOOTING.md**: Comandos operativos de mantenimiento, revisión de logs de sistema y resolución de fallos.
